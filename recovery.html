@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Sarah Nutrition — Diagnostica recupero dati</title>
+<style>
+:root{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;color:#2f3437;background:#f7f1e7}
+*{box-sizing:border-box}
+body{margin:0;padding:22px 16px 40px}
+main{max-width:900px;margin:auto}
+h1{font-size:26px;margin:0 0 8px}
+p{line-height:1.45}
+.note{background:#fff;border:1px solid #ddd3c4;border-radius:14px;padding:14px;margin:14px 0}
+.good{background:#eef8f1;border-color:#b9dbc2}
+.warn{background:#fff7df;border-color:#ead18a}
+.bad{background:#fff0f0;border-color:#e1b0b0}
+table{width:100%;border-collapse:collapse;background:#fff;border-radius:14px;overflow:hidden;margin-top:14px}
+th,td{padding:10px 8px;border-bottom:1px solid #eee;text-align:left;font-size:14px;vertical-align:top}
+th{background:#f1eee8}
+code{font-size:12px;word-break:break-all}
+button{appearance:none;border:0;border-radius:11px;padding:11px 14px;font-weight:650;background:#dcecf4;color:#23343c;margin:4px 6px 4px 0}
+button.secondary{background:#eee9df}
+button.danger{background:#f5dddd;color:#6b2424}
+.small{font-size:12px;color:#6b6f72}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:12px 0}
+.card{background:#fff;border:1px solid #ddd3c4;border-radius:13px;padding:12px}
+.card b{display:block;font-size:22px}
+#details{white-space:pre-wrap;word-break:break-word;background:#fff;border:1px solid #ddd3c4;border-radius:14px;padding:12px;max-height:300px;overflow:auto}
+</style>
+</head>
+<body>
+<main>
+<h1>Sarah Nutrition — Diagnostica recupero</h1>
+<p>Questa pagina <strong>non modifica e non cancella nulla</strong>. Legge soltanto il localStorage dell'indirizzo da cui è aperta e cerca copie dello stato di Sarah Nutrition.</p>
+
+<div id="origin" class="note"></div>
+<div id="summary" class="note"></div>
+
+<div class="cards">
+  <div class="card"><span>Chiavi Sarah trovate</span><b id="keyCount">0</b></div>
+  <div class="card"><span>Ricette max</span><b id="maxRecipes">0</b></div>
+  <div class="card"><span>Alimenti max</span><b id="maxFoods">0</b></div>
+  <div class="card"><span>Giorni diario max</span><b id="maxDiary">0</b></div>
+</div>
+
+<div style="overflow:auto">
+<table>
+<thead><tr>
+<th>Chiave</th><th>Ricette</th><th>Alimenti</th><th>Diario</th><th>Settimane</th><th>Pasti salvati</th><th>Peso</th><th>Azioni</th>
+</tr></thead>
+<tbody id="rows"></tbody>
+</table>
+</div>
+
+<h2>Dettagli</h2>
+<div id="details">Tocca “Dettagli” accanto a una copia.</div>
+
+<div class="note warn">
+<strong>Importante.</strong> Se qui non compare la copia con i dati mancanti, apri questa stessa pagina diagnostica sul vecchio indirizzo dell'app (per esempio il precedente sito Netlify). Il localStorage è separato per origine.
+</div>
+</main>
+
+<script>
+(function(){
+  const $=id=>document.getElementById(id);
+  const safeParse=s=>{try{const x=JSON.parse(s);return x&&typeof x==='object'?x:null}catch(e){return null}};
+  const arr=(x,k)=>Array.isArray(x&&x[k])?x[k]:[];
+  const obj=(x,k)=>x&&x[k]&&typeof x[k]==='object'&&!Array.isArray(x[k])?x[k]:{};
+  const bytes=s=>new Blob([s||'']).size;
+  const fmt=n=>n<1024?n+' B':n<1048576?(n/1024).toFixed(1)+' KB':(n/1048576).toFixed(2)+' MB';
+
+  $('origin').innerHTML='<strong>Origine attuale:</strong><br><code>'+location.origin+'</code><br><span class="small">'+location.href+'</span>';
+
+  const found=[];
+  for(let i=0;i<localStorage.length;i++){
+    const key=localStorage.key(i);
+    if(!key || !/^sarahNutrition/i.test(key)) continue;
+    const raw=localStorage.getItem(key);
+    const x=safeParse(raw);
+    if(!x) {
+      found.push({key,raw,valid:false});
+      continue;
+    }
+    const diary=obj(x,'diary'), weeks=obj(x,'weeks');
+    found.push({
+      key,raw,valid:true,x,
+      recipes:arr(x,'customRecipes').length,
+      foods:arr(x,'customFoods').length,
+      diary:Object.keys(diary).length,
+      weeks:Object.keys(weeks).length,
+      meals:arr(x,'savedMeals').length,
+      weights:arr(x.profile||{},'weightLog').length,
+      size:bytes(raw)
+    });
+  }
+
+  found.sort((a,b)=>{
+    const score=v=>(v.recipes||0)*6+(v.foods||0)*4+(v.diary||0)*10+(v.weeks||0)*5+(v.meals||0)*2+(v.weights||0);
+    return score(b)-score(a);
+  });
+
+  $('keyCount').textContent=found.length;
+  $('maxRecipes').textContent=Math.max(0,...found.map(x=>x.recipes||0));
+  $('maxFoods').textContent=Math.max(0,...found.map(x=>x.foods||0));
+  $('maxDiary').textContent=Math.max(0,...found.map(x=>x.diary||0));
+
+  const tbody=$('rows');
+  if(!found.length){
+    tbody.innerHTML='<tr><td colspan="8">Nessuna chiave Sarah Nutrition trovata in questo indirizzo.</td></tr>';
+    $('summary').className='note bad';
+    $('summary').innerHTML='<strong>Nessuna copia trovata.</strong> Questo indica che i dati mancanti non sono presenti nel localStorage di questa origine. Va controllato l’eventuale vecchio indirizzo dell’app.';
+    return;
+  }
+
+  const best=found.find(x=>x.valid);
+  $('summary').className='note good';
+  $('summary').innerHTML='<strong>Copia più ricca trovata:</strong> <code>'+esc(best?best.key:'—')+'</code>. Non è stato eseguito alcun ripristino. Usa “Esporta” per salvarne una copia prima di qualsiasi intervento.';
+
+  found.forEach((v,idx)=>{
+    const tr=document.createElement('tr');
+    if(!v.valid){
+      tr.innerHTML='<td><code>'+esc(v.key)+'</code></td><td colspan="6">JSON non leggibile</td><td><button class="secondary" data-export="'+idx+'">Esporta raw</button></td>';
+    } else {
+      tr.innerHTML=
+        '<td><code>'+esc(v.key)+'</code><br><span class="small">'+fmt(v.size)+'</span></td>'+
+        '<td>'+v.recipes+'</td><td>'+v.foods+'</td><td>'+v.diary+'</td><td>'+v.weeks+'</td><td>'+v.meals+'</td><td>'+v.weights+'</td>'+
+        '<td><button data-detail="'+idx+'">Dettagli</button><button class="secondary" data-export="'+idx+'">Esporta</button></td>';
+    }
+    tbody.appendChild(tr);
+  });
+
+  tbody.addEventListener('click',e=>{
+    const d=e.target.getAttribute('data-detail');
+    const ex=e.target.getAttribute('data-export');
+    if(d!==null){
+      const v=found[+d];
+      const recipeNames=arr(v.x,'customRecipes').map(z=>z&&z.name).filter(Boolean);
+      const foodNames=arr(v.x,'customFoods').map(z=>z&&z.name).filter(Boolean);
+      $('details').textContent=
+        'CHIAVE: '+v.key+'\n'+
+        'Dimensione: '+fmt(v.size)+'\n\n'+
+        'RICETTE PERSONALIZZATE ('+v.recipes+'):\n'+(recipeNames.join('\n')||'—')+'\n\n'+
+        'ALIMENTI PERSONALIZZATI ('+v.foods+'):\n'+(foodNames.join('\n')||'—')+'\n\n'+
+        'GIORNI DIARIO: '+v.diary+'\nSETTIMANE: '+v.weeks+'\nPASTI SALVATI: '+v.meals+'\nRILEVAZIONI PESO: '+v.weights;
+    }
+    if(ex!==null){
+      const v=found[+ex];
+      const blob=new Blob([v.raw||''],{type:'application/json'});
+      const a=document.createElement('a');
+      a.href=URL.createObjectURL(blob);
+      a.download='SarahNutrition_'+v.key.replace(/[^a-z0-9_-]/gi,'_')+'.json';
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+    }
+  });
+
+  function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+})();
+</script>
+</body>
+</html>
